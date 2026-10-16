@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Heart Ninja</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            line-height: 1.5;
+        }
+        /* Resaltamos el mejor puntaje con un color distinto */
+        #highscore-container {
+            color: #ffd700; /* Dorado */
+            font-size: 28px;
+        }
+        #radio-ui {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
+            border-radius: 10px;
+            border: 1px solid #ff4d4d;
+            text-align: center;
+            display: flex;
+            gap: 10px;
+        }
+        .btn-radio {
+            background: transparent;
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            outline: none;
+        }
+        .btn-radio:active {
+            transform: scale(0.9);
+        }
+        #gameover {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            text-align: center;
+            display: none;
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 15px;
+            border: 2px solid #ff4d4d;
+        }
+        .btn-juego {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 20px;
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #mensaje-inicio {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: rgba(255, 255, 255, 0.7);
+            pointer-events: none;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="highscore-container">Récord: <span id="highscore">0</span></div>
+        Puntos: <span id="score">0</span> <br>
+        Nivel: <span id="level">1</span> <br>
+        Vidas: <span id="lives">3</span>
+    </div>
+
+    <!-- Controles de la Radio -->
+    <div id="radio-ui">
+        <button id="btn-playpause" class="btn-radio" onclick="toggleRadio()">🎵 Play</button>
+        <button id="btn-next" class="btn-radio" onclick="siguienteCancion()">⏭️</button>
+        <audio id="musicaFondo"></audio>
+    </div>
+
+    <div id="mensaje-inicio">Toca o arrastra la pantalla para empezar...</div>
+
+    <div id="gameover">
+        <div>¡Juego Terminado!</div>
+        <button class="btn-juego" onclick="reiniciarJuego()">Volver a jugar</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let puntos = 0;
+        let nivel = 1;
+        let vidas = 3;
+        // Recuperar el mejor puntaje de localStorage (o 0 si es la primera vez)
+        let mejorPuntaje = localStorage.getItem('heartNinjaBestScore') || 0;
+        document.getElementById('highscore').innerText = mejorPuntaje;
+
+        let corazones = [];
+        let trazoEspada = [];
+        let isDrawing = false;
+        let gameLoopId;
+        let frames = 0;
+
+        // --- SISTEMA DE RADIO PLAYLIST ---
+        const musica = document.getElementById('musicaFondo');
+        const btnPlayPause = document.getElementById('btn-playpause');
+        const mensajeInicio = document.getElementById('mensaje-inicio');
+        
+        let radioEncendida = false;
+        let musicaIniciada = false;
+        let cancionActual = 0;
+
+        const playlist = [
+            "cancion1.mp3",
+            "cancion2.mp3",
+            "cancion3.mp3"
+        ];
+
+        musica.src = playlist[cancionActual];
+        musica.addEventListener('ended', siguienteCancion);
+
+        function autoPlayMusica() {
+            if (!musicaIniciada) {
+                musica.play().then(() => {
+                    btnPlayPause.innerText = "⏸️ Pause";
+                    radioEncendida = true;
+                    musicaIniciada = true;
+                    mensajeInicio.style.display = 'none';
+                }).catch(err => console.log("Esperando interacción..."));
+            }
+        }
+
+        window.addEventListener('mousedown', autoPlayMusica, { once: true });
+        window.addEventListener('touchstart', autoPlayMusica, { once: true });
+
+        function toggleRadio() {
+            if (radioEncendida) {
+                musica.pause();
+                btnPlayPause.innerText = "🎵 Play";
+            } else {
+                musica.play();
+                btnPlayPause.innerText = "⏸️ Pause";
+            }
+            radioEncendida = !radioEncendida;
+            musicaIniciada = true; 
+            mensajeInicio.style.display = 'none';
+        }
+
+        function siguienteCancion() {
+            cancionActual++;
+            if (cancionActual >= playlist.length) {
+                cancionActual = 0;
+            }
+            musica.src = playlist[cancionActual];
+            if (radioEncendida || musicaIniciada) {
+                musica.play();
+                btnPlayPause.innerText = "⏸️ Pause";
+                radioEncendida = true;
+            }
+        }
+        // -----------------------------------
+
+        class Corazon {
+            constructor() {
+                this.size = Math.random() * 30 + 40; 
+                this.x = Math.random() * (canvas.width - this.size);
+                this.y = -this.size; 
+                this.velocidadY = (Math.random() * 1 + 0.5) + ((nivel - 1) * 0.3); 
+                this.cortado = false;
+                this.opacidad = 1;
+            }
+
+            dibujar() {
+                ctx.globalAlpha = this.opacidad;
+                ctx.font = this.size + 'px Arial';
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.cortado ? '💔' : '❤️', this.x, this.y);
+                ctx.globalAlpha = 1;
+            }
+
+            actualizar() {
+                this.y += this.velocidadY;
+                if (this.cortado) {
+                    this.opacidad -= 0.04; 
+                    this.y += 1.5; 
+                }
+            }
+        }
+
+        function iniciarTrazo(x, y) {
+            isDrawing = true;
+            trazoEspada = [{x, y}];
+        }
+
+        function moverTrazo(x, y) {
+            if (!isDrawing) return;
+            trazoEspada.push({x, y});
+            if (trazoEspada.length > 10) trazoEspada.shift();
+            comprobarCorte(x, y);
+        }
+
+        function terminarTrazo() {
+            isDrawing = false;
+            trazoEspada = [];
+        }
+
+        canvas.addEventListener('mousedown', (e) => iniciarTrazo(e.clientX, e.clientY));
+        canvas.addEventListener('mousemove', (e) => moverTrazo(e.clientX, e.clientY));
+        window.addEventListener('mouseup', terminarTrazo);
+
+        canvas.addEventListener('touchstart', (e) => iniciarTrazo(e.touches[0].clientX, e.touches[0].clientY));
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            moverTrazo(e.touches[0].clientX, e.touches[0].clientY);
+        });
+        window.addEventListener('touchend', terminarTrazo);
+
+        function comprobarCorte(x, y) {
+            corazones.forEach(corazon => {
+                if (!corazon.cortado) {
+                    const distancia = Math.hypot(corazon.x - x, corazon.y - y);
+                    if (distancia < corazon.size / 1.5) {
+                        corazon.cortado = true;
+                        puntos += 10;
+                        document.getElementById('score').innerText = puntos;
+                        verificarNivel();
+                        actualizarMejorPuntaje();
+                    }
+                }
+            });
+        }
+
+        function verificarNivel() {
+            if (puntos >= nivel * 100) {
+                nivel++;
+                document.getElementById('level').innerText = nivel;
+            }
+        }
+
+        function actualizarMejorPuntaje() {
+            if (puntos > mejorPuntaje) {
+                mejorPuntaje = puntos;
+                document.getElementById('highscore').innerText = mejorPuntaje;
+                // Guardar en el almacenamiento del navegador
+                localStorage.setItem('heartNinjaBestScore', mejorPuntaje);
+            }
+        }
+
+        function dibujarEspada() {
+            if (trazoEspada.length < 2) return;
+            ctx.beginPath();
+            ctx.moveTo(trazoEspada[0].x, trazoEspada[0].y);
+            for (let i = 1; i < trazoEspada.length; i++) {
+                ctx.lineTo(trazoEspada[i].x, trazoEspada[i].y);
+            }
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = '#ff4d4d'; 
+            ctx.stroke();
+            ctx.shadowBlur = 0; 
+        }
+
+        function motorJuego() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let frecuenciaAparicion = Math.max(30, 120 - ((nivel - 1) * 15)); 
+            if (frames % frecuenciaAparicion === 0) {
+                corazones.push(new Corazon());
+            }
+
+            for (let i = corazones.length - 1; i >= 0; i--) {
+                let c = corazones[i];
+                c.actualizar();
+                c.dibujar();
+
+                if (c.y > canvas.height + c.size && !c.cortado) {
+                    vidas--;
+                    document.getElementById('lives').innerText = vidas;
+                    corazones.splice(i, 1);
+                    if (vidas <= 0) {
+                        terminarJuego();
+                        return;
+                    }
+                } else if (c.opacidad <= 0) {
+                    corazones.splice(i, 1);
+                }
+            }
+
+            dibujarEspada();
+            frames++;
+            gameLoopId = requestAnimationFrame(motorJuego);
+        }
+
+        function terminarJuego() {
+            document.getElementById('gameover').style.display = 'block';
+        }
+
+        function reiniciarJuego() {
+            puntos = 0;
+            nivel = 1;
+            vidas = 3;
+            frames = 0;
+            corazones = [];
+            document.getElementById('score').innerText = puntos;
+            document.getElementById('level').innerText = nivel;
+            document.getElementById('lives').innerText = vidas;
+            document.getElementById('gameover').style.display = 'none';
+            motorJuego();
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        motorJuego();
+    </script>
+</body>
+</html>
